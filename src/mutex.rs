@@ -3,12 +3,34 @@ use core::{
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
 };
-
+///
+/// 互斥锁(自旋锁实现的互斥锁)
+/// 当线程未持有锁时会一直循环，直到持有锁了
+/// # Exapmle
+/// 
+/// ```
+/// let locked = Mutex::new(1);
+/// let mut lock_guard = locked.lock()
+/// *lock_guard += 1;
+/// assert_eq!(*lock_guard, 2)
+/// ```
+/// 当guard被drop时，自动解锁
 pub struct Mutex<T: ?Sized> {
     pub(crate) lock: AtomicBool,
     data: UnsafeCell<T>,
 }
 
+/// 互斥锁守卫(自旋锁实现的互斥锁)
+/// 当守卫存在时，表示上锁，
+/// 首位持有期间的代码是临界代码
+/// # Exapmle
+/// 
+/// ```
+/// let locked = Mutex::new(1);
+/// let lock_guard = locked.lock()
+/// assert_eq!(*lock_guard, 1)
+/// ```
+/// 当guard被drop时，自动解锁
 pub struct MutexGuard<'a, T: ?Sized + 'a> {
     lock: &'a AtomicBool,
     data: *mut T,
@@ -28,10 +50,17 @@ impl<T> Mutex<T> {
         }
     }
 
-    pub fn is_locked(&self) -> bool {
+    fn is_locked(&self) -> bool {
         self.lock.load(Ordering::Relaxed)
     }
-
+    /// 上锁
+    ///# Examle
+    /// ```
+    /// let locked = Mutex::new(1);
+    /// let mut lock_guard = locked.lock()
+    /// *lock_guard += 1;
+    /// assert_eq!(*lock_guard, 2)
+    /// ```
     pub fn lock(&self) -> MutexGuard<T> {
         while self
             .lock
@@ -98,6 +127,6 @@ pub mod test {
         t1.join().expect("err");
         t2.join().expect("err");
         let c = lock.lock();
-        assert_eq!(*c,201)
+        assert_eq!(*c, 201)
     }
 }
