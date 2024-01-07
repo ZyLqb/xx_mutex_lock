@@ -2,7 +2,7 @@ use core::{
     cell::UnsafeCell,
     //ptr::NonNull,
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicIsize, Ordering},
 };
 
 /// 读写锁
@@ -27,40 +27,42 @@ use core::{
 ///     *write_lock += 1;
 /// } // 这里drop
 /// ```
-pub struct RWLock<T: ?Sized> {
-    pub(crate) lock: AtomicUsize,
+pub struct RWLock<T> {
+    pub(crate) lock: AtomicIsize,
     data: UnsafeCell<T>,
 }
 
-/// 使用usize的最后一位保存WRITED，剩下的用来保存
-/// READED(也就是一个WRITED和(usize/2)个READED)
-const READED: usize = 1 << 1;
-const WRITED: usize = 1;
+/// 使用iszie保存锁的状态：
+/// 正数表示读锁，同时可以作为读锁的计数
+/// -1 表示写锁，只有一种状态
+const READED: isize = 1;
+const WRITED: isize = -1;
 
 /// 读锁守卫
-pub struct RWLockReadGuard<'a, T: ?Sized> {
+pub struct RWLockReadGuard<'a, T> {
     inner: &'a RWLock<T>,
     data: *const T,
 }
 
 /// 写锁守卫
-pub struct RWLockWriteGuard<'a, T: ?Sized + 'a> {
+pub struct RWLockWriteGuard<'a, T> {
     inner: &'a RWLock<T>,
     data: *mut T,
 }
 
-unsafe impl<T: ?Sized + Send> Send for RWLock<T> {}
-unsafe impl<T: ?Sized + Send + Sync> Sync for RWLock<T> {}
+unsafe impl<T: Send> Send for RWLock<T> {}
+unsafe impl<T: Send + Sync> Sync for RWLock<T> {}
 
 impl<T> RWLock<T> {
-    pub fn new(data: T) -> Self {
+    pub const fn new(data: T) -> Self {
         RWLock {
-            lock: AtomicUsize::new(0),
+            lock: AtomicIsize::new(0),
             data: UnsafeCell::new(data),
         }
     }
 
     /// 获取写锁
+    #[inline]
     pub fn write(&self) -> RWLockWriteGuard<T> {
         loop {
             match self.try_write() {
@@ -71,6 +73,7 @@ impl<T> RWLock<T> {
     }
 
     /// 非阻塞地获取写锁
+    #[inline]
     pub fn try_write(&self) -> Option<RWLockWriteGuard<T>> {
         if self.write_request() {
             Some(RWLockWriteGuard {
@@ -82,32 +85,21 @@ impl<T> RWLock<T> {
         }
     }
 
+    #[inline]
     fn write_request(&self) -> bool {
         if self
             .lock
             .compare_exchange(0, WRITED, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
         {
-            self.lock.fetch_add(WRITED, Ordering::Acquire);
             true
         } else {
             false
         }
     }
 
-    fn read_request(&self) -> usize {
-        const MAX_READERS: usize = core::usize::MAX / READED / 2;
-        let prev_readers = self.lock.fetch_add(READED, Ordering::Acquire);
-
-        if prev_readers >= MAX_READERS * READED {
-            self.lock.fetch_sub(READED, Ordering::Relaxed);
-            panic!("too many readers");
-        } else {
-            prev_readers
-        }
-    }
-
     /// 获取读锁
+    #[inline]
     pub fn read(&self) -> RWLockReadGuard<T> {
         loop {
             match self.try_read() {
@@ -118,8 +110,9 @@ impl<T> RWLock<T> {
     }
 
     /// 非阻塞地获取读锁
+    #[inline]
     pub fn try_read(&self) -> Option<RWLockReadGuard<T>> {
-        if (self.read_request() | WRITED) != 0 {
+        if self.read_request() >= 0 {
             Some(RWLockReadGuard {
                 inner: &self,
                 data: self.data.get(),
@@ -128,35 +121,49 @@ impl<T> RWLock<T> {
             None
         }
     }
+
+    #[inline]
+    fn read_request(&self) -> isize {
+        const MAX_READERS: isize = core::isize::MAX;
+        let mut readers = self.lock.load(Ordering::Acquire);
+
+        if readers >= MAX_READERS && readers < 0 {
+            // panic!("read request wrong");
+            -1
+        } else {
+            readers = self.lock.fetch_add(READED, Ordering::Relaxed);
+            readers
+        }
+    }
 }
 
-impl<'a, T: ?Sized> Deref for RWLockReadGuard<'a, T> {
+impl<'a, T> Deref for RWLockReadGuard<'a, T> {
     type Target = T;
     fn deref(&self) -> &T {
         unsafe { &*self.data }
     }
 }
 
-impl<'a, T: ?Sized> Deref for RWLockWriteGuard<'a, T> {
+impl<'a, T> Deref for RWLockWriteGuard<'a, T> {
     type Target = T;
     fn deref(&self) -> &T {
         unsafe { &*self.data }
     }
 }
 
-impl<'a, T: ?Sized> Drop for RWLockReadGuard<'a, T> {
+impl<'a, T> Drop for RWLockReadGuard<'a, T> {
     fn drop(&mut self) {
         self.inner.lock.fetch_sub(READED, Ordering::Release);
     }
 }
 
-impl<'a, T: ?Sized> Drop for RWLockWriteGuard<'a, T> {
+impl<'a, T> Drop for RWLockWriteGuard<'a, T> {
     fn drop(&mut self) {
-        self.inner.lock.load(Ordering::Relaxed);
+        self.inner.lock.fetch_sub(WRITED, Ordering::Release);
     }
 }
 
-impl<'a, T: ?Sized> DerefMut for RWLockWriteGuard<'a, T> {
+impl<'a, T> DerefMut for RWLockWriteGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { &mut *self.data }
     }
@@ -187,26 +194,36 @@ pub mod test {
 
     #[test]
     fn test_rw_read_request() {
-        const READED: usize = 1 << 1;
         let m = RWLock::new(0);
+        let wlock = m.try_write();
+
+        assert_eq!(-1, m.read_request());
+        drop(wlock);
 
         let mut i = 0;
         while i < 100 {
-            let value = m.read_request();
-            assert_eq!(READED * i, value);
             i += 1;
+            assert_eq!(i, m.read_request());
         }
+
+        assert!(!m.write_request());
     }
 
     #[test]
     fn test_rw_try_read() {
         let m = RWLock::new(0);
+        let wlock = m.try_write();
+
+        assert!(m.try_read().is_none());
+        drop(wlock);
 
         let mut i = 0;
         while i < 100 {
             assert!(m.try_read().is_some());
             i += 1;
         }
+
+        assert!(m.try_write().is_none());
     }
 
     #[test]
@@ -218,11 +235,16 @@ pub mod test {
         assert_eq!(0, *read_lock1);
         assert_eq!(0, *read_lock2);
 
+        assert!(data.try_write().is_none());
+
         drop(read_lock1);
         drop(read_lock2);
 
         let mut write_lock = data.write();
         *write_lock += 1;
+
+        assert!(data.try_write().is_none());
+        assert!(data.try_read().is_none());
 
         assert_eq!(1, *write_lock);
     }
