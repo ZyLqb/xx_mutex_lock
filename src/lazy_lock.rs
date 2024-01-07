@@ -27,7 +27,7 @@ impl<T, F> LazyLock<T, F> {
     ///
     /// 在解引用的时候调用force初始化
     /// 这样就可以达到在访问的时候初始化
-    /// 
+    ///
     fn force(this: &Self) -> &T
     where
         F: FnOnce() -> T,
@@ -49,7 +49,6 @@ impl<T, F: FnOnce() -> T> Deref for LazyLock<T, F> {
         Self::force(self)
     }
 }
-
 
 impl<T: Default> Default for LazyLock<T, fn() -> T> {
     fn default() -> Self {
@@ -83,6 +82,5 @@ pub mod test {
 
         let c = **arc_once;
         std::println!("{}", c);
-        
     }
 }
