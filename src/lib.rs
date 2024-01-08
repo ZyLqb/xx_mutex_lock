@@ -12,3 +12,5 @@ pub use mutex::Mutex;
 pub use mutex::MutexGuard;
 pub use once_lock::OnceLock;
 pub use rw_lock::RWLock;
+pub use rw_lock::RWLockReadGuard;
+pub use rw_lock::RWLockWriteGuard;

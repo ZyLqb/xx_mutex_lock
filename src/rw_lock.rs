@@ -77,7 +77,7 @@ impl<T> RWLock<T> {
     pub fn try_write(&self) -> Option<RWLockWriteGuard<T>> {
         if self.write_request() {
             Some(RWLockWriteGuard {
-                inner: &self,
+                inner: self,
                 data: self.data.get(),
             })
         } else {
@@ -87,15 +87,9 @@ impl<T> RWLock<T> {
 
     #[inline]
     fn write_request(&self) -> bool {
-        if self
-            .lock
+        self.lock
             .compare_exchange(0, WRITED, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
-        {
-            true
-        } else {
-            false
-        }
     }
 
     /// 获取读锁
@@ -114,7 +108,7 @@ impl<T> RWLock<T> {
     pub fn try_read(&self) -> Option<RWLockReadGuard<T>> {
         if self.read_request() >= 0 {
             Some(RWLockReadGuard {
-                inner: &self,
+                inner: self,
                 data: self.data.get(),
             })
         } else {
@@ -127,7 +121,7 @@ impl<T> RWLock<T> {
         const MAX_READERS: isize = core::isize::MAX;
         let mut readers = self.lock.load(Ordering::Acquire);
 
-        if readers >= MAX_READERS && readers < 0 {
+        if readers == MAX_READERS || readers < 0 {
             // panic!("read request wrong");
             -1
         } else {

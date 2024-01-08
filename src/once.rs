@@ -1,7 +1,7 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 ///一共四种状态
 /// 用来表示once的运行状态
-/// 
+///
 pub mod status {
     pub const INCOMPLETE: u8 = 0x00;
     pub const RUNNING: u8 = 0x01;
@@ -9,7 +9,6 @@ pub mod status {
     pub const PANICKED: u8 = 0x03;
 }
 use status::*;
-
 
 /// 确保一段代码即使是在多线程的情况下，也只执行一次
 /// # Example
@@ -39,7 +38,7 @@ impl Once {
     }
     ///
     /// 运行只运行一次的代码
-    /// 
+    ///
     /// # Example
     /// ```
     /// use crate::once::Once;
@@ -60,7 +59,7 @@ impl Once {
     fn call<F: FnOnce()>(&self, f: F) {
         loop {
             // compare_exchange 是原子的交换两个数字，他的返回值是Result
-            // 只有一个线程会成功，成功后将status的值设置成RUNNING  
+            // 只有一个线程会成功，成功后将status的值设置成RUNNING
             // 如果失败了会返回当前status里面的值
             let xchg = self.status.compare_exchange(
                 status::INCOMPLETE,
@@ -87,7 +86,7 @@ impl Once {
             }
             //这个finish用于判断是否在持有锁的时候panic掉了
             //在panic时会drop所持有所有权的数据，
-            //在这个finish drop的时候，将状态设置为panic,让其他线程知道有个线程panic了            
+            //在这个finish drop的时候，将状态设置为panic,让其他线程知道有个线程panic了
             let finish = Finish {
                 status: &self.status,
             };
