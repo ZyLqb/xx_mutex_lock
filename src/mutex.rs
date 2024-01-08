@@ -7,7 +7,7 @@ use core::{
 /// 互斥锁(自旋锁实现的互斥锁)
 /// 当线程未持有锁时会一直循环，直到持有锁了
 /// # Exapmle
-/// 
+///
 /// ```
 /// let locked = Mutex::new(1);
 /// let mut lock_guard = locked.lock()
@@ -24,7 +24,7 @@ pub struct Mutex<T: ?Sized> {
 /// 当守卫存在时，表示上锁，
 /// 首位持有期间的代码是临界代码
 /// # Exapmle
-/// 
+///
 /// ```
 /// let locked = Mutex::new(1);
 /// let lock_guard = locked.lock()

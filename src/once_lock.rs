@@ -4,12 +4,12 @@ use super::once::Once;
 
 /// 用于初始化全局变量，只能初始化一次，不能改变
 /// # Example
-/// 
+///
 /// ```
 /// use crate::once_lock::OnceLock;
-/// 
+///
 /// let INIT = OnceLock::new();
-/// 
+///
 /// INIT.get_or_init({
 ///     //run init code here
 /// })
@@ -39,8 +39,8 @@ impl<T> OnceLock<T> {
     ///用法
     /// ```
     ///use crate::once_lock::OnceLock;
-    /// let INIT = OnceLock::new(); 
-    /// 
+    /// let INIT = OnceLock::new();
+    ///
     /// INIT.get_or_init(|| 3);
     ///  
     /// assert_eq!(3,INIT.get())
@@ -57,8 +57,8 @@ impl<T> OnceLock<T> {
     ///用法
     /// ```
     ///use crate::once_lock::OnceLock;
-    /// let INIT = OnceLock::new(); 
-    /// 
+    /// let INIT = OnceLock::new();
+    ///
     /// INIT.set(|| 3);
     ///  
     /// assert_eq!(3,INIT.get())
@@ -85,8 +85,8 @@ impl<T> OnceLock<T> {
     //可以传入一个闭包,具体用法参见上面的例子
     /// ```
     ///use crate::once_lock::OnceLock;
-    /// let INIT = OnceLock::new(); 
-    /// 
+    /// let INIT = OnceLock::new();
+    ///
     /// INIT.get_or_init(|| 3);
     ///  
     /// assert_eq!(3,INIT.get())
@@ -145,8 +145,6 @@ impl<T> OnceLock<T> {
     }
 }
 
-
-
 unsafe impl<#[may_dangle] T> Drop for OnceLock<T> {
     fn drop(&mut self) {
         if self.is_initialized() {
@@ -167,7 +165,7 @@ pub mod test {
         let once_2 = arc_once.clone();
         let t1 = std::thread::spawn(move || {
             std::println!("im first t1");
-            let _ = once_1.get_or_init( || 1);
+            let _ = once_1.get_or_init(|| 1);
         });
 
         let t2 = std::thread::spawn(move || {
@@ -180,6 +178,6 @@ pub mod test {
 
         let c = arc_once.get();
         //这个值等于先运行的线程的初始化的值
-        std::println!("{:?}",c.unwrap())
+        std::println!("{:?}", c.unwrap())
     }
 }
